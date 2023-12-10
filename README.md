@@ -32,8 +32,7 @@ Run the sender executable with the appropriate command-line arguments:
 
 + On Windows: ```sender.exe <server_ip> <port> <file_to_send>```
 
-+ On Unix: ```./sender <server_ip> <port> <file_to_send>
-Receiver```
++ On Unix: ```./sender <server_ip> <port> <file_to_send>```
 
 ### Receiver
 Run the recver executable with the appropriate command-line arguments:
@@ -50,9 +49,15 @@ To simply show the IP adress of the current machine, use the following command:
 
 ## Features
 
-+ (Currently Dealing With Bugs On Cross-Platforming) Cross-platform support: Works on Windows, macOS, and Linux.
++ Cross-platform support: Works on Windows, macOS, and Linux.
 + Command-line interface: Easy to use commands for sending and receiving files.
 + Network communication: Uses TCP/IP for reliable data transfer.
+
+## Furute Works
+
++ Fix file corruption from potential packet loss
++ Add encryption
++ Add more options to visualize the progress
 
 ## Contributing
 
