@@ -50,7 +50,7 @@ To simply show the IP adress of the current machine, use the following command:
 
 ## Features
 
-+ Cross-platform support: Works on Windows, macOS, and Linux.
++ (Currently Dealing With Bugs On Cross-Platforming) Cross-platform support: Works on Windows, macOS, and Linux.
 + Command-line interface: Easy to use commands for sending and receiving files.
 + Network communication: Uses TCP/IP for reliable data transfer.
 
