@@ -1,0 +1,55 @@
+name: Build Project
+
+on: [ push, pull_request ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ windows-latest, ubuntu-latest, macos-latest ]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up environment
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            choco install mingw
+            echo "CXX=g++" >> $GITHUB_ENV
+          else
+            echo "CXX=g++" >> $GITHUB_ENV
+          fi
+
+      - name: Compile for Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          $CXX -O2 -o windows/sender.exe windows/sender.cpp -lws2_32 -liphlpapi
+          $CXX -O2 -o windows/recver.exe windows/recver.cpp -lws2_32 -liphlpapi
+
+      - name: Compile for Unix
+        if: runner.os != 'Windows'
+        run: |
+          $CXX -O2 -o unix/sender unix/sender.cpp
+          $CXX -O2 -o unix/recver unix/recver.cpp
+
+      - name: Upload Artifacts for Windows
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v2
+        with:
+          name: windows-artifacts
+          path: |
+            windows/sender.exe
+            windows/recver.exe
+
+      - name: Upload Artifacts for Unix
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v2
+        with:
+          name: unix-artifacts-${{ matrix.os }}
+          path: |
+            unix/sender
+            unix/recver
