@@ -18,10 +18,12 @@ using Clock = std::chrono::steady_clock;
 #ifdef _WIN32
 using Handle = SOCKET;
 using SocketLength = int;
+using BufferLength = int;
 constexpr Handle invalid_socket = INVALID_SOCKET;
 #else
 using Handle = int;
 using SocketLength = socklen_t;
+using BufferLength = std::size_t;
 constexpr Handle invalid_socket = -1;
 #endif
 

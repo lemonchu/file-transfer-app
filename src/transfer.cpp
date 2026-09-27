@@ -19,6 +19,7 @@
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
+#include <share.h>
 #include <sys/stat.h>
 #include <windows.h>
 #else
@@ -197,8 +198,10 @@ public:
             name << ".file-transfer-" << std::hex << random() << random() << ".part";
             temporary_ = destination_.parent_path() / name.str();
 #ifdef _WIN32
-            const int descriptor = _wopen(temporary_.c_str(), _O_CREAT | _O_EXCL | _O_WRONLY | _O_BINARY,
-                                          _S_IREAD | _S_IWRITE);
+            int descriptor = -1;
+            const int code = _wsopen_s(&descriptor, temporary_.c_str(),
+                _O_CREAT | _O_EXCL | _O_WRONLY | _O_BINARY, _SH_DENYRW, _S_IREAD | _S_IWRITE);
+            if (code != 0) errno = code;
 #else
             const int descriptor = open(temporary_.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0600);
 #endif
@@ -298,8 +301,10 @@ void send_file(const Options& options) {
         done += count;
         progress.update(done);
     }
-    if (input.peek() != std::char_traits<char>::eof() || input.bad())
-        throw std::runtime_error("Input file grew or could not be read during transfer");
+    // A filebuf may retain bytes read ahead before another process truncates the file.
+    // Check the current filesystem size as well as the stream, before sending the checksum.
+    if (fs::file_size(path) != size || input.peek() != std::char_traits<char>::eof() || input.bad())
+        throw std::runtime_error("Input file changed size or could not be read during transfer");
     std::array<unsigned char, 4> checksum{};
     encode(checksum.data(), crc.value(), checksum.size());
     socket.send_all(checksum.data(), checksum.size(), options.timeout);

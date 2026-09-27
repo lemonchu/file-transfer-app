@@ -156,7 +156,7 @@ void Socket::send_all(const void* data, std::size_t size, int timeout) const {
     auto deadline = Clock::now() + std::chrono::seconds(timeout);
     while (size > 0) {
         wait_ready(handle_, true, deadline);
-        const int count = static_cast<int>(std::min<std::size_t>(size, 64 * 1024));
+        const auto count = static_cast<BufferLength>(std::min<std::size_t>(size, 64 * 1024));
         int flags = 0;
 #ifdef MSG_NOSIGNAL
         flags = MSG_NOSIGNAL;
@@ -178,7 +178,7 @@ void Socket::receive_all(void* data, std::size_t size, int timeout) const {
     auto deadline = Clock::now() + std::chrono::seconds(timeout);
     while (size > 0) {
         wait_ready(handle_, false, deadline);
-        const int count = static_cast<int>(std::min<std::size_t>(size, 64 * 1024));
+        const auto count = static_cast<BufferLength>(std::min<std::size_t>(size, 64 * 1024));
         const auto received = recv(handle_, bytes, count, 0);
         if (received < 0) {
             if (retryable(last_error())) continue;
