@@ -1,68 +1,169 @@
 # File Transfer Application
 
-This project provides a simple implementation of a file transfer application. It includes separate implementations for Windows and Unix (macOS and Linux) systems. The application is capable of sending and receiving files over a network.
+A small command-line tool for sending one file directly between Windows, macOS,
+and Linux computers. Written in C++17, with no third-party runtime dependencies.
 
-## Structure
+`sender` connects to `recver`, which verifies the file and saves it to the path
+you choose. Both programs exit after one transfer.
 
-- `windows/`: Contains the source code for the Windows version of the application.
-- `unix/`: Contains the source code for the Unix (macOS and Linux) version of the application.
+## Build
 
-## Compilation
+Requirements: CMake 3.16+ and a C++17 compiler (GCC 9+, modern Clang, or Visual
+Studio 2019+). Python 3.8+ is needed only for tests. Windows builds use the system
+Winsock and IP Helper libraries.
 
-### Windows
-
-Use MinGW or a similar GCC-based toolchain for Windows. The following commands can be used to compile the application:
-
-```bash
-g++ -O2 -o windows/sender.exe windows/sender.cpp -lws2_32 -liphlpapi
-g++ -O2 -o windows/recver.exe windows/recver.cpp -lws2_32 -liphlpapi
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake --build build --config Release --parallel
 ```
 
-### Unix (macOS and Linux)
-Use GCC or Clang to compile the application. The following commands can be used:
-```bash
-g++ -O2 -o unix/sender unix/sender.cpp
-g++ -O2 -o unix/recver unix/recver.cpp
+On Linux/macOS the executables are `build/sender` and `build/recver`. With Visual
+Studio they are `build/Release/sender.exe` and `build/Release/recver.exe`. MinGW
+is also supported; use the `MinGW Makefiles` generator if needed.
+
+Optional installation:
+
+```sh
+cmake --install build --config Release --prefix ./package
 ```
 
-## Usage
+The executables will be under `package/bin/`.
 
-### Sender
-Run the sender executable with the appropriate command-line arguments:
+## Quick start
 
-+ On Windows: ```sender.exe <server_ip> <port> <file_to_send>```
+On the **receiving computer**, list its addresses and start the receiver:
 
-+ On Unix: ```./sender <server_ip> <port> <file_to_send>```
+```sh
+./build/recver --list-ips
+./build/recver 9000 received.zip
+```
 
-### Receiver
-Run the recver executable with the appropriate command-line arguments:
+On the **sending computer**, use the receiver's reachable IP address:
 
-+ On Windows: ```recver.exe <port> <file_to_save>```
+```sh
+./build/sender 192.168.1.10 9000 original.zip
+```
 
-+ On Unix: ```./recver <port> <file_to_save>```
+Use the corresponding `.exe` paths on Windows. Quote paths containing spaces.
+The receiver's firewall must allow the selected TCP port. Use a LAN address for
+another computer; `127.0.0.1` and `::1` refer to the current computer. There is no
+automatic device discovery, relay, or NAT traversal.
 
-To simply show the IP adress of the current machine, use the following command:
+Both sides show bytes transferred, percentage, and average MiB/s. The sender
+reports success only after the receiver verifies and saves the file. Transfer
+progress reaching 100% alone does not confirm that the file has been saved.
 
-+ On Windows: ```recver.exe```
+## Commands and options
 
-+ On Unix: ```./recver```
+```text
+sender <host> <port> <file> [options]
+recver <port> <output> [options]
+```
 
-## Features
+The original command names and positional arguments are preserved. `host` may
+be an IPv4 address, IPv6 address (without URL brackets), or hostname. Ports must
+be integers from 1 to 65535.
 
-+ Cross-platform support: Works on Windows, macOS, and Linux.
-+ Command-line interface: Easy to use commands for sending and receiving files.
-+ Network communication: Uses TCP/IP for reliable data transfer.
+| Option | Available on | Meaning |
+| --- | --- | --- |
+| `--timeout <seconds>` | Both | Network inactivity limit, 1–86400 seconds; default **30**. Also limits waiting for an incoming connection and connecting to a peer. |
+| `--quiet` | Both | Suppress progress, listening, and success messages; errors remain visible. |
+| `--help`, `-h` | Both | Show usage when used alone. |
+| `--version` | Both | Show versions when used alone. |
+| `--` | Both | Treat remaining arguments as positional, including names starting with `-`. |
+| `--bind <address>` | Receiver | Listen address; defaults to `0.0.0.0` (all IPv4 interfaces). |
+| `--force` | Receiver | Replace an existing regular file **only after** successful verification. |
+| `--max-size <bytes>` | Receiver | Reject files above this size; default is no limit. `0` accepts empty files only. |
+| `--list-ips` | Receiver | List local addresses when used alone. No arguments also prints usage and addresses. |
 
-## Furute Works
+Examples:
 
-+ Fix file corruption from potential packet loss
-+ Add encryption
-+ Add more options to visualize the progress
+```sh
+# Allow five minutes to start sending; allow at most 1 GiB.
+./build/recver 9000 archive.zip --timeout 300 --max-size 1073741824
 
-## Contributing
+# Replace an existing destination after verification.
+./build/recver 9000 archive.zip --force
 
-Contributions to this project are welcome. Please ensure that any pull requests or issues are clear and descriptive.
+# Restrict reception to this computer.
+./build/recver 9000 output.bin --bind 127.0.0.1
+
+# IPv6 (availability and dual-stack behavior depend on the OS).
+./build/recver 9000 output.bin --bind ::
+./build/sender ::1 9000 input.bin
+
+# A source name beginning with a dash.
+./build/sender --quiet -- 192.168.1.10 9000 -input.bin
+```
+
+Exit codes: `0` means success, `1` means a transfer/system error, and `2` means
+invalid arguments. Help, version, and address listing return `0`.
+
+## Reliability and scope
+
+- A versioned header carries the 64-bit file size. Exact-length I/O handles
+  partial sends, fragmented reads, interruptions, and network failures.
+- A streaming CRC32 checksum detects accidental corruption without reading the
+  source twice. Memory use stays bounded using 64 KiB transfer buffers.
+- Reception writes to an exclusively created `.file-transfer-*.part` file in
+  the destination directory. The destination appears only after the expected
+  length, checksum, and end of stream are checked and file data flushed.
+- Existing destinations are refused by default, even if another process creates
+  one during reception. `--force` permits replacement; failed transfers leave
+  the original intact. Directories and existing symlinks are not replacement targets.
+- Ordinary failures and Ctrl+C clean up temporary files. A forced process kill
+  or machine crash can leave a `.part` file; remove it after confirming the
+  corresponding receiver is no longer running.
+- On Unix, publishing without `--force` uses a hard link to prevent overwrite
+  races, so the destination filesystem must support hard links. Windows uses
+  `MoveFileExW`. Received files use fresh permissions/metadata; source permissions,
+  timestamps, and filenames are not transmitted.
+
+This version is intended for **trusted networks**. It has no encryption or
+peer authentication; CRC32 is not a security check. The first client to connect
+occupies the receiver. There is no resume, directory transfer, compression, or
+concurrent reception. Do not modify the source during transmission: shrinking
+or growing files are detected, but in-place edits are not reliably detectable.
+
+Timeouts measure network inactivity, not total transfer duration. DNS lookup
+and local filesystem operations use OS behavior and are outside that timeout.
+If the connection fails after the receiver saves the file but before its final
+acknowledgement arrives, the sender reports unconfirmed delivery; inspect the
+destination before retrying.
+
+**Compatibility:** both endpoints must use this version. The original 2023
+programs sent an unframed byte stream and cannot interoperate with protocol 1.
+See [the wire protocol](docs/protocol.md).
+
+## Test and develop
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build --config Release --parallel
+cd build
+ctest -C Release --output-on-failure
+```
+
+The Python standard-library suite launches real processes on loopback sockets.
+It covers file-size boundaries, multi-megabyte data, Unicode paths, IPv6,
+independent Python protocol peers, fragmented messages, checksum failures,
+truncation, timeouts, cancellation, acknowledgements, and destination protection.
+IPv6 is skipped when unavailable; signal and symlink tests run on Unix. Linux
+also runs test-only binaries that force short socket reads/writes, `EINTR`, and
+`EAGAIN` to verify retry behavior deterministically.
+
+GitHub Actions builds, tests, and packages executables separately for Windows,
+macOS, and Linux. Runs upload one archive per platform. Binaries are not committed.
+
+```text
+src/net.*          Socket lifetime, nonblocking I/O, deadlines, address lookup
+src/transfer.*     CLI, protocol, CRC32, progress, safe file publication
+src/sender.cpp     Sender entry point
+src/recver.cpp     Receiver entry point
+tests/             Black-box integration tests
+docs/protocol.md   Wire format and failure semantics
+```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+[MIT](LICENSE).
